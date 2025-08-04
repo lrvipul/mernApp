@@ -1,6 +1,8 @@
 const express = require('express');
 const User = require("../models/User")
 const bcrypt = require('bcryptjs');
+const fetchuser = require("../middleware/fetchuser")
+
 var jwt = require('jsonwebtoken');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
@@ -8,7 +10,7 @@ const { body, validationResult } = require('express-validator');
 const JWT_SECRET = 'HarHarMahadev$Hail'
 
 
-// Create a User using : POST "/api/auth/createuser". Does not require auth
+// Route 1 : Create a User using : POST "/api/auth/createuser". Does not require auth
 router.post('/createUser',[
     body('name',"Enter a valid name").isLength({ min: 3 }),
     body('email',"Enter a valid Email").isEmail(),
@@ -32,8 +34,6 @@ router.post('/createUser',[
 
             const salt = await bcrypt.genSalt(10);
             const secPass = await bcrypt.hash(req.body.password,salt);
-
-            var token = jwt.sign({ foo: 'bar' }, 'shhhhh');
 
             // create new User
             user = await User.create({
@@ -72,5 +72,69 @@ router.post('/createUser',[
     })
 
 
+    // Route 2 :  User Login : POST "/api/auth/login". Does not require auth
+    router.post('/login',[
+    body('email')
+        .isEmail().withMessage('Enter a valid email')
+        .exists().withMessage('EmailId cant be blank'),
+    body('password')
+        .exists().withMessage("Password should not be empty")
+        .notEmpty().withMessage("Password should not be empty")
+    ],
+    async function (req, res, next) {
 
-module.exports = router
+        try{            
+            // Validate User fields 
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ errors: errors.array() });
+            }
+
+            const{email,password} = req.body;
+
+            // check if user exists in database or not
+            let user = await User.findOne({ email });
+
+            // if user does nto exists then show error message
+            if(!user)
+                return res.status(400).json({ message: "Please try with the correct credentials again!" });
+
+            const comparePass = await bcrypt.compare(password, user.password);
+
+            if(!comparePass)
+                return res.status(400).json({ message: "Please try with the correct credentials again!" });
+    
+            const data = {
+                user:{
+                    id:user.id
+                }
+            }
+            const authToken =  jwt.sign(data,JWT_SECRET)
+
+            return res.status(200).json({ authToken, message: `User LoggedIn successfully!.` });
+
+        } catch(error){
+            console.error('Error checking user existence:', error);
+            return res.status(500).json({ message: 'Server error during user check.' })
+        }
+    })
+
+
+    // Route 3 : get LoggedIn User Details : POST "/api/auth/getUser". require auth
+    router.post('/getuser',fetchuser,  async (req, res) =>  {
+
+        try{            
+            console.log("user ID = "+req.user);
+            let userId = req.user.id;
+
+            const user = await User.findById(userId).select("-password");
+            
+            return res.status(200).json({ user,  message: `User details!.` });
+
+        } catch(error){
+            console.error('Error checking user existence:', error);
+            return res.status(500).json({ message: 'Server error during user check.' })
+        }
+    })
+
+    module.exports = router
