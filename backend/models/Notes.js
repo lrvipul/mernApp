@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const noteSchema = new Schema({
+    user: {
+        type: mongoose.Schema.Types.ObjectId, // This indicates a reference
+        ref: 'user' // This specifies the model to reference
+    },
     title: {
         type: String,
         require:true
